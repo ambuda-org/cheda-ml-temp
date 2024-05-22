@@ -2,8 +2,9 @@
 
 mkdir data
 cd data
-rm -rf data/dcs
-rm -rf data/texts
+rm -rf dcs
+rm -rf texts
+rm -rf dataset
 git clone https://github.com/ambuda-org/texts.git
 git clone https://github.com/ambuda-org/dcs.git
 cd ..

@@ -3,19 +3,22 @@ from bs4 import BeautifulSoup
 import subprocess
 import os
 import sys
+import numpy as np
+import random
+from tokenizer import CharTokenizer
 
+############################################################################################################################
+############################################################################################################################
 def line():
-  print("==========================================")
+  print("==============================================================================================================================")
 
+# Define special token IDs
+PAD_TOKEN_ID = 1
+SOS_TOKEN_ID = 2
+EOS_TOKEN_ID = 3
 
-for directory in ["data/dcs", "data/texts", "data/dataset"]:
-    if not os.path.exists(directory):
-        line()
-        print(f"Error: Directory '{directory}' not found.")
-        print("Error: Dataset not initialized!")
-        print("Run `fetch_data.sh` !!!")
-        line()
-        sys.exit(1)
+############################################################################################################################
+############################################################################################################################
 
 # Mahabharata, Shatakatraya need some more work
 input_files = [
@@ -35,7 +38,6 @@ input_files = [
     # ("data/dcs/shatakatrayam.txt", "data/texts/gretil/sa_bhatRhari-zatakatraya.xml")
 ]
 
-import re
 
 def getItem(id, isKira, isBodhi, isKoki, isKu, isMegh, isRitu, isRam):
     if isRam:
@@ -113,7 +115,7 @@ def extract_orig_text(xml_path, ids):
                 for i in text.split('|'):
                     i = i.strip()
                     if len(i) > 0 and not i[0].isdigit() and not i[0] == ')' and not i[0] == '(':
-                      original_texts[tag_id] += (i.strip())
+                        original_texts[tag_id] += (i.strip())
     return original_texts
 
 def combine_and_write(txt_path, xml_path, output_path):
@@ -129,11 +131,146 @@ def combine_and_write(txt_path, xml_path, output_path):
                 file.write("\n")
             file.write(entries_dict[id])
 
-line()
-for txt_path, xml_path in input_files:
-    print(txt_path)
-    if not xml_path:
-        continue
-    output_path = "data/dataset/" + txt_path.split('/')[-1]
-    combine_and_write(txt_path, xml_path, output_path)
+############################################################################################################################
+############################################################################################################################
+
+for directory in ["data/dcs", "data/texts"]:
+    if not os.path.exists(directory):
+        line()
+        print(f"Error: Directory '{directory}' not found.")
+        print("Error: Dataset not initialized!")
+        print("Run `fetch_data.sh` !!!")
+        line()
+        sys.exit(1)
+
+if not os.path.exists("data/dataset"):
+    os.mkdir("data/dataset")
     line()
+    for txt_path, xml_path in input_files:
+        print(txt_path)
+        if not xml_path:
+            continue
+        output_path = "data/dataset/" + txt_path.split('/')[-1]
+        combine_and_write(txt_path, xml_path, output_path)
+        line()
+
+############################################################################################################################
+############################################################################################################################
+
+# Using only the sandhi splits for now
+
+tokenizer = CharTokenizer()
+
+def process_file(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+    
+    sections = content.split("# id =")
+    dataset = []
+    max_len_original = 0
+    max_len_target = 0
+
+    for section in sections:
+        if section.strip():
+            lines = section.strip().split('\n')
+            original_line = lines[1].strip()
+            target_lines = '_'.join([line.split('\t')[0].strip() for line in lines[2:] if line.strip()])
+            original_enc = np.array(tokenizer.encode(original_line))
+            target_enc = np.array(tokenizer.encode(target_lines))
+            max_len_original = max(max_len_original, original_enc.shape[0])
+            max_len_target = max(max_len_target, target_enc.shape[0])
+            dataset.append([original_enc, target_enc])
+
+    return dataset, max_len_original, max_len_target
+
+def pad_sequence(sequence, max_length):
+    padded_sequence = np.full((max_length, 1), PAD_TOKEN_ID, dtype=int)
+    padded_sequence[:sequence.shape[0], 0] = sequence.flatten()
+    return padded_sequence
+
+def create_dataset(directory):
+    dataset = []
+    max_len_original = 0
+    max_len_target = 0
+
+    for filename in os.listdir(directory):
+        if filename.endswith('.txt'):
+            file_path = os.path.join(directory, filename)
+            enc, max_orig, max_tgt = process_file(file_path)
+            max_len_original = max(max_len_original, max_orig)
+            max_len_target = max(max_len_target, max_tgt)
+            for e in enc:
+                dataset.append(e)
+
+    padded_dataset = []
+    for original_enc, target_enc in dataset:
+        padded_orig = pad_sequence(original_enc, max_len_original)
+        padded_tgt = pad_sequence(target_enc, max_len_target)
+        padded_dataset.append([padded_orig, padded_tgt])
+
+    inputs = []
+    targets = []
+    for inp, tgt in padded_dataset:
+        inputs.append(inp)
+        targets.append(tgt)
+
+    inputs = np.array(inputs)
+    targets = np.array(targets)
+    
+    return inputs, targets
+
+def save_dataset(dataset, output_file):
+    np.save(output_file, dataset)
+
+input_directory = 'data/dataset'
+
+inputs, targets = create_dataset(input_directory)
+
+
+############################################################################################################################
+############################################################################################################################
+
+
+dataset_size = len(inputs)
+test_size = 0.2  # 20% of the dataset for testing
+
+dataset = list(zip(inputs, targets))
+random.shuffle(dataset)
+
+test_split_index = int(dataset_size * (1 - test_size))
+train_set = dataset[:test_split_index]
+test_set = dataset[test_split_index:]
+
+inputs_train, targets_train = zip(*train_set)
+inputs_test, targets_test = zip(*test_set)
+
+save_dataset(inputs_train, 'train_inputs.npy')
+save_dataset(targets_train, 'train_targets.npy')
+
+save_dataset(inputs_test, 'test_inputs.npy')
+save_dataset(targets_test, 'test_targets.npy')
+
+tokenizer.save("tokenizer.pkl")
+
+
+############################################################################################################################
+############################################################################################################################
+
+
+# Load and print the dataset to verify
+print("SAMPLE FROM DATASET:")
+inputs = np.load("train_inputs.npy", allow_pickle=True)
+targets = np.load("train_targets.npy", allow_pickle=True)
+
+random_index = random.randint(0, len(inputs) - 1)
+line()
+inputs = inputs.reshape(inputs.shape[0], -1)
+targets = targets.reshape(targets.shape[0], -1)
+tokenizer = CharTokenizer()
+tokenizer.load('tokenizer.pkl')
+print(f"{random_index}-th sentence (Input):")
+print(f'"{tokenizer.decode(inputs[random_index].tolist())}"')
+line()
+print(f"{random_index}-th sentence (Target):")
+print(f'"{tokenizer.decode(targets[random_index].tolist())}"')
+line()
