@@ -12,7 +12,7 @@ from tokenizer import CharTokenizer
 def line():
   print("==============================================================================================================================")
 
-# Define special token IDs
+UNK_TOKEN_ID = 0
 PAD_TOKEN_ID = 1
 SOS_TOKEN_ID = 2
 EOS_TOKEN_ID = 3
@@ -173,7 +173,7 @@ def process_file(file_path):
     for section in sections:
         if section.strip():
             lines = section.strip().split('\n')
-            original_line = lines[1].strip()
+            original_line = '_'.join(lines[1].strip().split(' '))
             target_lines = '_'.join([line.split('\t')[0].strip() for line in lines[2:] if line.strip()])
             original_enc = np.array(tokenizer.encode(original_line))
             target_enc = np.array(tokenizer.encode(target_lines))
@@ -187,6 +187,8 @@ def pad_sequence(sequence, max_length):
     padded_sequence = np.full((max_length, 1), PAD_TOKEN_ID, dtype=int)
     padded_sequence[:sequence.shape[0], 0] = sequence.flatten()
     return padded_sequence
+
+
 
 def create_dataset(directory):
     dataset = []
@@ -215,7 +217,10 @@ def create_dataset(directory):
         targets.append(tgt)
 
     inputs = np.array(inputs)
+    inputs = inputs.reshape(inputs.shape[0], inputs.shape[1])
+
     targets = np.array(targets)
+    targets = targets.reshape(targets.shape[0], targets.shape[1])
     
     return inputs, targets
 

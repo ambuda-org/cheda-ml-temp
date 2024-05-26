@@ -4,3 +4,7 @@ data/texts
 venv
 *.npy
 *.pkl
+*.pth.tar
+*.pth
+__pycache__
+foo*

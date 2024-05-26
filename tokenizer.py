@@ -1,14 +1,14 @@
 import pickle
 
-# Define special token IDs
+UNK_TOKEN_ID = 0
 PAD_TOKEN_ID = 1
 SOS_TOKEN_ID = 2
 EOS_TOKEN_ID = 3
 
 class CharTokenizer:
     def __init__(self):
-        self.char_to_id = {'<PAD>': PAD_TOKEN_ID, '<SOS>': SOS_TOKEN_ID, '<EOS>': EOS_TOKEN_ID}
-        self.id_to_char = {PAD_TOKEN_ID: '<PAD>', SOS_TOKEN_ID: '<SOS>', EOS_TOKEN_ID: '<EOS>'}
+        self.char_to_id = {'<PAD>': PAD_TOKEN_ID, '<SOS>': SOS_TOKEN_ID, '<EOS>': EOS_TOKEN_ID, '<UNK>': UNK_TOKEN_ID}
+        self.id_to_char = {PAD_TOKEN_ID: '<PAD>', SOS_TOKEN_ID: '<SOS>', EOS_TOKEN_ID: '<EOS>', UNK_TOKEN_ID: '<UNK>'}
         self.next_id = 4
 
     def encode(self, text):
@@ -23,7 +23,7 @@ class CharTokenizer:
         return encoded
 
     def decode(self, ids):
-        return ''.join(self.id_to_char[id_] for id_ in ids if id_ not in (SOS_TOKEN_ID, EOS_TOKEN_ID, PAD_TOKEN_ID))
+        return ''.join(self.id_to_char[id_] for id_ in ids if id_ not in (UNK_TOKEN_ID, SOS_TOKEN_ID, EOS_TOKEN_ID, PAD_TOKEN_ID))
 
     def save(self, file_path):
         with open(file_path, 'wb') as file:
